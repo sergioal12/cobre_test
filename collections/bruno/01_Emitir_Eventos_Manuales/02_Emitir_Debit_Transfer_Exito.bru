@@ -1,0 +1,27 @@
+meta {
+  name: 1.2 Emitir debit_transfer (Exito 200)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/notification_events
+  body: json
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT002
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "event_id": "EVT-MANUAL-002",
+    "event_type": "debit_transfer",
+    "content": "ACH transfer sent to supplier account #9981 for $3,200.00",
+    "client_id": "CLIENT002",
+    "webhook_url": "{{webhook_ok_url}}"
+  }
+}
+

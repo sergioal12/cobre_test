@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "name": "Cobre Event Notification Service",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}
+

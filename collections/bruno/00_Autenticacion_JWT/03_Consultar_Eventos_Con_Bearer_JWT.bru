@@ -1,0 +1,16 @@
+meta {
+  name: 0.3 Consultar Eventos con Bearer JWT
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/notification_events
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{jwt_token}}
+}
+

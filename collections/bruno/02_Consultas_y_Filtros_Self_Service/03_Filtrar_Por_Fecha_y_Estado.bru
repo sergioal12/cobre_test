@@ -1,0 +1,22 @@
+meta {
+  name: 2.3 Filtrar por Fecha y Estado
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/notification_events?delivery_status=completed&from_date=2024-03-15T09:00:00Z&to_date=2024-03-15T16:00:00Z
+  body: none
+  auth: none
+}
+
+params:query {
+  delivery_status: completed
+  from_date: 2024-03-15T09:00:00Z
+  to_date: 2024-03-15T16:00:00Z
+}
+
+headers {
+  X-Client-Id: CLIENT001
+}
+

@@ -1,0 +1,16 @@
+meta {
+  name: 2.1 Listar Eventos Cliente
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/notification_events
+  body: none
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT001
+}
+

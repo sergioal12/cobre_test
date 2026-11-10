@@ -1,0 +1,27 @@
+meta {
+  name: 1.5 Emitir Evento Bloqueado Anti-SSRF
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/notification_events
+  body: json
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT001
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "event_id": "EVT-SSRF-TEST",
+    "event_type": "debit_automatic_payment",
+    "content": "Testing SSRF protection against cloud metadata IP",
+    "client_id": "CLIENT001",
+    "webhook_url": "https://169.254.169.254/latest/meta-data"
+  }
+}
+

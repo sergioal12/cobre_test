@@ -1,0 +1,27 @@
+meta {
+  name: 1.4 Emitir credit_refund Falla (5 Reintentos a DLQ)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/notification_events
+  body: json
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT003
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "event_id": "EVT-DLQ-DEMO-01",
+    "event_type": "credit_refund",
+    "content": "Refund processed for international wire #5541 for $890.00",
+    "client_id": "CLIENT003",
+    "webhook_url": "{{webhook_fail_url}}"
+  }
+}
+

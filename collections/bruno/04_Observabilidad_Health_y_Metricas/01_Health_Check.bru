@@ -1,0 +1,12 @@
+meta {
+  name: 4.1 Healthcheck
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/actuator/health
+  body: none
+  auth: none
+}
+

@@ -1,0 +1,74 @@
+spring:
+  application:
+    name: cobre-notification-service
+
+  datasource:
+    url: jdbc:h2:mem:cobredb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Observability (Near Real-Time Monitoring via Actuator & Prometheus)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# Resilience4j Retry & Circuit Breaker Configuration (Max 5 retries before DLQ)
+resilience4j:
+  retry:
+    instances:
+      webhookDelivery:
+        maxAttempts: 5
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        enableRandomizedWait: true
+        randomizedWaitFactor: 0.3
+  circuitbreaker:
+    instances:
+      webhookDelivery:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+
+# Application Custom Properties
+cobre:
+  notification:
+    seed-file: file:./notification_events.json
+    classpath-seed-file: classpath:data/notification_events.json
+    webhook:
+      default-url: ${COBRE_WEBHOOK_URL:https://postman-echo.com/post}
+      max-attempts: 5
+      initial-backoff-ms: 200
+      connect-timeout-ms: 10000
+      read-timeout-ms: 15000
+      allow-insecure-localhost: false
+      signing-secret: ${COBRE_WEBHOOK_SECRET:cobre-default-hmac-secret-key-2026}

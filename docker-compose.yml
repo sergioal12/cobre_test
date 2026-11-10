@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cobre-postgres
+    environment:
+      POSTGRES_DB: cobredb
+      POSTGRES_USER: cobre
+      POSTGRES_PASSWORD: cobre_secret_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cobre -d cobredb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      target: runtime
+    container_name: cobre-notification-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cobredb
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      SPRING_DATASOURCE_USERNAME: cobre
+      SPRING_DATASOURCE_PASSWORD: cobre_secret_password
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      COBRE_NOTIFICATION_SEED_FILE: file:/app/notification_events.json
+      COBRE_WEBHOOK_URL: ${COBRE_WEBHOOK_URL:-https://postman-echo.com/post}
+      COBRE_WEBHOOK_SECRET: ${COBRE_WEBHOOK_SECRET:-cobre-default-hmac-secret-key-2026}
+    volumes:
+      - ./notification_events.json:/app/notification_events.json:ro
+    restart: unless-stopped
+
+  test:
+    image: maven:3.9.9-eclipse-temurin-21-alpine
+    container_name: cobre-notification-test
+    profiles:
+      - test
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - maven_m2:/root/.m2
+      - maven_target:/workspace/target
+    command: mvn test -B
+
+volumes:
+  postgres_data:
+  maven_m2:
+  maven_target:
+

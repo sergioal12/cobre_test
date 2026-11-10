@@ -1,0 +1,27 @@
+meta {
+  name: 1.1 Emitir credit_card_payment (Exito 200)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/notification_events
+  body: json
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT001
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "event_id": "EVT-MANUAL-001",
+    "event_type": "credit_card_payment",
+    "content": "Credit card payment received for $420.00 USD",
+    "client_id": "CLIENT001",
+    "webhook_url": "{{webhook_ok_url}}"
+  }
+}
+

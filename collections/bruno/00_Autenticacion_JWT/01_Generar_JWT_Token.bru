@@ -1,0 +1,29 @@
+meta {
+  name: 0.1 Generar JWT Token (HS256)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/auth/token
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "client_id": "{{client_id}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body && res.body.access_token) {
+    bru.setEnvVar("jwt_token", res.body.access_token);
+    bru.setVar("jwt_token", res.body.access_token);
+  }
+}
+

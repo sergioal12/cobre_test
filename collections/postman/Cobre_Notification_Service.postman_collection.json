@@ -1,0 +1,394 @@
+{
+  "info": {
+    "_postman_id": "c0b2e111-9475-4dcc-9279-de73d8edc5f5",
+    "name": "Cobre Event Notification Service & Self-Service API",
+    "description": "Colección completa para probar manualmente el despacho de eventos de distintos tipos (credit_card_payment, debit_transfer, balance_update, credit_refund), la política de 5 reintentos con paso a DLQ, las consultas filtradas, el reprocesamiento manual (replay), la seguridad OWASP (BOLA y Anti-SSRF) y las métricas Prometheus.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "client_id",
+      "value": "CLIENT001",
+      "type": "string"
+    },
+    {
+      "key": "webhook_ok_url",
+      "value": "https://postman-echo.com/post",
+      "type": "string"
+    },
+    {
+      "key": "webhook_fail_url",
+      "value": "https://postman-echo.com/status/503",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Emitir Eventos Manuales (Distintos Tipos)",
+      "item": [
+        {
+          "name": "1.1 Emitir Evento: credit_card_payment (Entrega Exitosa 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"EVT-MANUAL-001\",\n  \"event_type\": \"credit_card_payment\",\n  \"content\": \"Credit card payment received for $420.00 USD\",\n  \"client_id\": \"CLIENT001\",\n  \"webhook_url\": \"{{webhook_ok_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            },
+            "description": "Crea y despacha inmediatamente un evento de tipo credit_card_payment firmado con HMAC-SHA256 hacia el webhook HTTPS."
+          }
+        },
+        {
+          "name": "1.2 Emitir Evento: debit_transfer (Entrega Exitosa 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT002",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"EVT-MANUAL-002\",\n  \"event_type\": \"debit_transfer\",\n  \"content\": \"ACH transfer sent to supplier account #9981 for $3,200.00\",\n  \"client_id\": \"CLIENT002\",\n  \"webhook_url\": \"{{webhook_ok_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            },
+            "description": "Crea y despacha un evento de tipo debit_transfer para CLIENT002."
+          }
+        },
+        {
+          "name": "1.3 Emitir Evento: balance_update (Entrega Exitosa 200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT003",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"EVT-MANUAL-003\",\n  \"event_type\": \"balance_update\",\n  \"content\": \"Account balance updated: available balance is now $18,450.75\",\n  \"client_id\": \"CLIENT003\",\n  \"webhook_url\": \"{{webhook_ok_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            },
+            "description": "Crea y despacha un evento de actualización de saldo (balance_update) para CLIENT003."
+          }
+        },
+        {
+          "name": "1.4 Emitir Evento: credit_refund con Falla (5 Reintentos -> Tabla DLQ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT003",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"EVT-DLQ-DEMO-01\",\n  \"event_type\": \"credit_refund\",\n  \"content\": \"Refund processed for international wire #5541 for $890.00\",\n  \"client_id\": \"CLIENT003\",\n  \"webhook_url\": \"{{webhook_fail_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            },
+            "description": "Apunta a un endpoint que devuelve HTTP 503. Ejecuta la política de máximo 5 reintentos con Exponential Backoff + Jitter, registra los 5 intentos fallidos y guarda el evento en la tabla notification_dlq para reprocesamiento manual."
+          }
+        },
+        {
+          "name": "1.5 Emitir Evento: Bloqueo Anti-SSRF (OWASP API7 / A10)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"EVT-SSRF-TEST\",\n  \"event_type\": \"debit_automatic_payment\",\n  \"content\": \"Testing SSRF protection against cloud metadata IP\",\n  \"client_id\": \"CLIENT001\",\n  \"webhook_url\": \"https://169.254.169.254/latest/meta-data\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            },
+            "description": "Demuestra cómo el validador Anti-SSRF bloquea direcciones IP privadas/internas o de metadatos de nube (169.254.169.254)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Consultas y Filtros Self-Service API",
+      "item": [
+        {
+          "name": "2.1 Listar Todos los Eventos de un Cliente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Filtrar Eventos por Estado (delivery_status=failed)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT003",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events?delivery_status=failed",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"],
+              "query": [
+                {
+                  "key": "delivery_status",
+                  "value": "failed"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.3 Filtrar Eventos por Rango de Fechas y Estado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events?delivery_status=completed&from_date=2024-03-15T09:00:00Z&to_date=2024-03-15T16:00:00Z",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events"],
+              "query": [
+                {
+                  "key": "delivery_status",
+                  "value": "completed"
+                },
+                {
+                  "key": "from_date",
+                  "value": "2024-03-15T09:00:00Z"
+                },
+                {
+                  "key": "to_date",
+                  "value": "2024-03-15T16:00:00Z"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.4 Obtener Detalle e Historial de Intentos (GET /{id})",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events/EVT001",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events", "EVT001"]
+            }
+          }
+        },
+        {
+          "name": "2.5 Prueba BOLA/IDOR: Cliente A intenta ver Evento de Cliente B (404/403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events/EVT003",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events", "EVT003"]
+            },
+            "description": "Verifica que CLIENT001 no pueda acceder a EVT003 (que pertenece a CLIENT002)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Reprocesamiento Manual (Replay) y Tabla DLQ",
+      "item": [
+        {
+          "name": "3.1 Consultar Eventos en la Tabla DLQ del Cliente (GET /dlq)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT003",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events/dlq",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events", "dlq"]
+            },
+            "description": "Consulta los registros almacenados en la tabla notification_dlq tras fallar 5 reintentos."
+          }
+        },
+        {
+          "name": "3.2 Reprocesar Manualmente Evento Fallido (POST /{id}/replay -> 200 OK)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT003",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhook_url\": \"{{webhook_ok_url}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/notification_events/EVT005/replay",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events", "EVT005", "replay"]
+            },
+            "description": "Reenvía manualmente EVT005 hacia una URL webhook operativa. Actualiza el evento a completed y marca el registro en notification_dlq como reprocessed."
+          }
+        },
+        {
+          "name": "3.3 Intentar Replay de Evento Ya Completado (409 Conflict)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "CLIENT001",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notification_events/EVT001/replay",
+              "host": ["{{base_url}}"],
+              "path": ["notification_events", "EVT001", "replay"]
+            },
+            "description": "Verifica que un evento en estado completed no pueda ser reenviado (retorna 409 Conflict)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Observabilidad (Health & Prometheus Metrics)",
+      "item": [
+        {
+          "name": "4.1 Healthcheck (/actuator/health)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Métricas Near Real-Time (/actuator/prometheus)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/prometheus",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "prometheus"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

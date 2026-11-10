@@ -1,0 +1,27 @@
+meta {
+  name: 1.3 Emitir balance_update (Exito 200)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/notification_events
+  body: json
+  auth: none
+}
+
+headers {
+  X-Client-Id: CLIENT003
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "event_id": "EVT-MANUAL-003",
+    "event_type": "balance_update",
+    "content": "Account balance updated: available balance is now $18,450.75",
+    "client_id": "CLIENT003",
+    "webhook_url": "{{webhook_ok_url}}"
+  }
+}
+
