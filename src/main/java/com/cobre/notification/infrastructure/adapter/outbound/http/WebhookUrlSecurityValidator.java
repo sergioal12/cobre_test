@@ -1,5 +1,6 @@
 package com.cobre.notification.infrastructure.adapter.outbound.http;
 
+import com.cobre.notification.application.port.outbound.WebhookUrlValidatorPort;
 import com.cobre.notification.infrastructure.config.NotificationProperties;
 import org.springframework.stereotype.Component;
 
@@ -12,7 +13,9 @@ import java.net.URI;
  * unless explicitly allowed for local testing.
  */
 @Component
-public class WebhookUrlSecurityValidator {
+public class WebhookUrlSecurityValidator implements WebhookUrlValidatorPort {
+
+    static final int MAX_URL_LENGTH = 512;
 
     private final NotificationProperties properties;
 
@@ -20,9 +23,17 @@ public class WebhookUrlSecurityValidator {
         this.properties = properties;
     }
 
+    @Override
+    public void validate(String webhookUrl) {
+        validateTargetUrl(webhookUrl);
+    }
+
     public void validateTargetUrl(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             throw new IllegalArgumentException("Webhook URL must not be blank");
+        }
+        if (rawUrl.trim().length() > MAX_URL_LENGTH) {
+            throw new IllegalArgumentException("Webhook URL must not exceed " + MAX_URL_LENGTH + " characters");
         }
 
         URI uri = URI.create(rawUrl.trim());

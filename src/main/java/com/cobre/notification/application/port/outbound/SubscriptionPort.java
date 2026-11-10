@@ -11,6 +11,5 @@ public interface SubscriptionPort {
 
     Optional<WebhookSubscription> findActiveSubscriptionByClientId(String clientId);
 
-    default void updateWebhookUrl(String clientId, String newWebhookUrl) {
-    }
+    void updateWebhookUrl(String clientId, String newWebhookUrl);
 }

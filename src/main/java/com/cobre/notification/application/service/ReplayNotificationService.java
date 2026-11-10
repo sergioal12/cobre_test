@@ -1,10 +1,10 @@
 package com.cobre.notification.application.service;
 
 import com.cobre.notification.application.port.inbound.DeliverNotificationUseCase;
+import com.cobre.notification.application.port.inbound.ManageWebhookSubscriptionUseCase;
 import com.cobre.notification.application.port.inbound.ReplayNotificationUseCase;
 import com.cobre.notification.application.port.outbound.NotificationEventRepositoryPort;
 import com.cobre.notification.application.port.outbound.NotificationMetricsPort;
-import com.cobre.notification.application.port.outbound.SubscriptionPort;
 import com.cobre.notification.domain.exception.EventNotFoundException;
 import com.cobre.notification.domain.exception.InvalidReplayStateException;
 import com.cobre.notification.domain.exception.UnauthorizedClientAccessException;
@@ -19,18 +19,18 @@ public class ReplayNotificationService implements ReplayNotificationUseCase {
 
     private final NotificationEventRepositoryPort eventRepositoryPort;
     private final DeliverNotificationUseCase deliverNotificationUseCase;
-    private final SubscriptionPort subscriptionPort;
+    private final ManageWebhookSubscriptionUseCase manageWebhookSubscriptionUseCase;
     private final NotificationMetricsPort metricsPort;
 
     public ReplayNotificationService(
             NotificationEventRepositoryPort eventRepositoryPort,
             DeliverNotificationUseCase deliverNotificationUseCase,
-            SubscriptionPort subscriptionPort,
+            ManageWebhookSubscriptionUseCase manageWebhookSubscriptionUseCase,
             NotificationMetricsPort metricsPort
     ) {
         this.eventRepositoryPort = eventRepositoryPort;
         this.deliverNotificationUseCase = deliverNotificationUseCase;
-        this.subscriptionPort = subscriptionPort;
+        this.manageWebhookSubscriptionUseCase = manageWebhookSubscriptionUseCase;
         this.metricsPort = metricsPort;
     }
 
@@ -54,7 +54,7 @@ public class ReplayNotificationService implements ReplayNotificationUseCase {
         }
 
         if (overrideWebhookUrl != null && !overrideWebhookUrl.isBlank()) {
-            subscriptionPort.updateWebhookUrl(clientId.trim(), overrideWebhookUrl.trim());
+            manageWebhookSubscriptionUseCase.updateWebhookUrl(clientId.trim(), overrideWebhookUrl.trim());
         }
 
         event.prepareForReplay();

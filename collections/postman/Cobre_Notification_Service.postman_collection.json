@@ -25,6 +25,21 @@
       "key": "webhook_fail_url",
       "value": "https://postman-echo.com/status/503",
       "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJDTElFTlQwMDEiLCJjbGllbnRfaWQiOiJDTElFTlQwMDEiLCJpc3MiOiJjb2JyZS1ub3RpZmljYXRpb24tc2VydmljZSIsImlhdCI6MTc5NDMyNTA2NCwiZXhwIjoxNzk2OTE3MDY0fQ.2Y070cq_X-tIalwpZ61F_Yy6LSfUo0_WF-oBC8AJnxw",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token_2",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJDTElFTlQwMDIiLCJjbGllbnRfaWQiOiJDTElFTlQwMDIiLCJpc3MiOiJjb2JyZS1ub3RpZmljYXRpb24tc2VydmljZSIsImlhdCI6MTc5NDMyNTA2NCwiZXhwIjoxNzk2OTE3MDY0fQ.iERdgKvFrUVQWHL2wsUu-_SUOxboaJRXI8j4hETLyoI",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token_3",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJDTElFTlQwMDMiLCJjbGllbnRfaWQiOiJDTElFTlQwMDMiLCJpc3MiOiJjb2JyZS1ub3RpZmljYXRpb24tc2VydmljZSIsImlhdCI6MTc5NDMyNTA2NCwiZXhwIjoxNzk2OTE3MDY0fQ.sVPvKq254PGGCn2d5LA8qO_pdAlxP6eixKqbpYFDJAY",
+      "type": "string"
     }
   ],
   "item": [
@@ -37,8 +52,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               },
               {
@@ -65,8 +80,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT002",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_2}}",
                 "type": "text"
               },
               {
@@ -93,8 +108,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT003",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_3}}",
                 "type": "text"
               },
               {
@@ -121,8 +136,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT003",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_3}}",
                 "type": "text"
               },
               {
@@ -149,8 +164,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               },
               {
@@ -182,8 +197,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               }
             ],
@@ -200,8 +215,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT003",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_3}}",
                 "type": "text"
               }
             ],
@@ -224,8 +239,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               }
             ],
@@ -256,8 +271,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               }
             ],
@@ -274,8 +289,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               }
             ],
@@ -298,8 +313,8 @@
             "method": "GET",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT003",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_3}}",
                 "type": "text"
               }
             ],
@@ -317,8 +332,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT003",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token_3}}",
                 "type": "text"
               },
               {
@@ -345,8 +360,8 @@
             "method": "POST",
             "header": [
               {
-                "key": "X-Client-Id",
-                "value": "CLIENT001",
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
                 "type": "text"
               }
             ],

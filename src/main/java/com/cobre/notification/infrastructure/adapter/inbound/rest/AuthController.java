@@ -1,12 +1,16 @@
 package com.cobre.notification.infrastructure.adapter.inbound.rest;
 
 import com.cobre.notification.domain.exception.UnauthorizedClientAccessException;
+import com.cobre.notification.infrastructure.security.ClientCredentialsService;
 import com.cobre.notification.infrastructure.security.JwtTokenService;
 import com.cobre.notification.infrastructure.security.JwtTokenService.GeneratedToken;
 import com.cobre.notification.infrastructure.security.JwtTokenService.ValidatedToken;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,45 +18,36 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
 
 @RestController
 @RequestMapping("/auth")
-@Tag(name = "JWT Authentication API", description = "Endpoints to generate and validate HS256 JWT tokens per client_id")
+@Tag(name = "JWT Authentication API", description = "Client credentials -> signed HS256 JWT, and token validation")
 public class AuthController {
 
     private final JwtTokenService jwtTokenService;
+    private final ClientCredentialsService clientCredentialsService;
 
-    public AuthController(JwtTokenService jwtTokenService) {
+    public AuthController(JwtTokenService jwtTokenService, ClientCredentialsService clientCredentialsService) {
         this.jwtTokenService = jwtTokenService;
+        this.clientCredentialsService = clientCredentialsService;
     }
 
     @PostMapping("/token")
     @Operation(
-            summary = "Generate a signed HS256 JWT token for a client",
-            description = "Issues a signed RFC 7519 JWT token containing the client_id claim. Provide client_id in the JSON body, query parameter, or X-Client-Id header."
+            summary = "Exchange client credentials for a signed HS256 JWT",
+            description = "Authenticates the (client_id, client_secret) pair and issues a short-lived RFC 7519 JWT "
+                    + "whose client_id claim is the only tenant identity accepted by /notification_events."
     )
-    public ResponseEntity<TokenResponseDto> generateToken(
-            @RequestHeader(value = NotificationEventController.CLIENT_ID_HEADER, required = false) String headerClientId,
-            @RequestParam(value = "client_id", required = false) String queryClientId,
-            @RequestBody(required = false) TokenRequestDto requestBody
-    ) {
-        String effectiveClientId = firstNonBlank(
-                requestBody != null ? requestBody.clientId() : null,
-                queryClientId,
-                headerClientId
+    public ResponseEntity<TokenResponseDto> generateToken(@Valid @RequestBody TokenRequestDto requestBody) {
+        String authenticatedClientId = clientCredentialsService.authenticate(
+                requestBody.clientId(),
+                requestBody.clientSecret()
         );
 
-        if (effectiveClientId == null) {
-            throw new IllegalArgumentException(
-                    "client_id is required in request body, query param, or X-Client-Id header to generate a JWT token"
-            );
-        }
-
-        GeneratedToken generated = jwtTokenService.generateToken(effectiveClientId);
+        GeneratedToken generated = jwtTokenService.generateToken(authenticatedClientId);
         return ResponseEntity.ok(new TokenResponseDto(
                 generated.accessToken(),
                 generated.tokenType(),
@@ -66,14 +61,12 @@ public class AuthController {
     @GetMapping("/validate")
     @Operation(
             summary = "Validate a Bearer JWT token and inspect its claims",
-            description = "Verifies the HMAC-SHA256 signature and expiration of the Authorization: Bearer <token> header and returns the decoded claims."
+            description = "Verifies the HMAC-SHA256 signature and expiration of the Authorization: Bearer <token> header."
     )
     public ResponseEntity<TokenValidationResponseDto> validateToken(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestParam(value = "token", required = false) String tokenParam
+            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader
     ) {
-        String rawToken = extractBearerToken(authorizationHeader, tokenParam);
-        ValidatedToken validated = jwtTokenService.validateToken(rawToken);
+        ValidatedToken validated = jwtTokenService.validateToken(extractBearerToken(authorizationHeader));
         return ResponseEntity.ok(new TokenValidationResponseDto(
                 validated.valid(),
                 validated.clientId(),
@@ -83,31 +76,21 @@ public class AuthController {
         ));
     }
 
-    private String extractBearerToken(String authorizationHeader, String tokenParam) {
-        if (authorizationHeader != null && !authorizationHeader.isBlank()) {
-            String trimmed = authorizationHeader.trim();
-            if (trimmed.regionMatches(true, 0, "Bearer ", 0, 7)) {
-                return trimmed.substring(7).trim();
-            }
-            return trimmed;
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank()
+                || !authorizationHeader.trim().regionMatches(true, 0, "Bearer ", 0, 7)) {
+            throw new UnauthorizedClientAccessException("Authorization: Bearer <token> header is required");
         }
-        if (tokenParam != null && !tokenParam.isBlank()) {
-            return tokenParam.trim();
-        }
-        throw new UnauthorizedClientAccessException("Authorization: Bearer <token> header is required");
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String v : values) {
-            if (v != null && !v.isBlank()) {
-                return v.trim();
-            }
-        }
-        return null;
+        return authorizationHeader.trim().substring(7).trim();
     }
 
     public record TokenRequestDto(
-            @JsonProperty("client_id") String clientId
+            @NotBlank(message = "client_id is required")
+            @Size(max = 64, message = "client_id must not exceed 64 characters")
+            @JsonProperty("client_id") String clientId,
+            @NotBlank(message = "client_secret is required")
+            @Size(max = 256, message = "client_secret must not exceed 256 characters")
+            @JsonProperty("client_secret") String clientSecret
     ) {
     }
 
@@ -130,4 +113,3 @@ public class AuthController {
     ) {
     }
 }
-

@@ -23,6 +23,7 @@ public class JwtTokenService {
 
     private static final String HMAC_SHA256 = "HmacSHA256";
     private static final String ISSUER = "cobre-notification-service";
+    private static final int MIN_SECRET_BYTES = 32;
 
     private final ObjectMapper objectMapper;
     private final String jwtSecret;
@@ -33,6 +34,11 @@ public class JwtTokenService {
             @Value("${cobre.security.jwt.secret:cobre-jwt-signing-secret-key-2026-hs256}") String jwtSecret,
             @Value("${cobre.security.jwt.expiration-seconds:3600}") long expirationSeconds
     ) {
+        if (jwtSecret == null || jwtSecret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "cobre.security.jwt.secret must be at least " + MIN_SECRET_BYTES + " bytes long for HS256"
+            );
+        }
         this.objectMapper = objectMapper;
         this.jwtSecret = jwtSecret;
         this.expirationSeconds = expirationSeconds > 0 ? expirationSeconds : 3600L;
@@ -91,6 +97,12 @@ public class JwtTokenService {
         }
 
         try {
+            Map<String, Object> header = objectMapper.readValue(
+                    Base64.getUrlDecoder().decode(parts[0]), new TypeReference<>() {});
+            if (!"HS256".equals(header.get("alg"))) {
+                throw new UnauthorizedClientAccessException("Unsupported JWT algorithm: only HS256 is accepted");
+            }
+
             byte[] payloadBytes = Base64.getUrlDecoder().decode(parts[1]);
             Map<String, Object> claims = objectMapper.readValue(payloadBytes, new TypeReference<>() {});
 

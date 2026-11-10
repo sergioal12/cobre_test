@@ -1,10 +1,10 @@
 package com.cobre.notification.infrastructure.adapter.inbound.rest;
 
-import com.cobre.notification.application.port.inbound.DeliverNotificationUseCase;
+import com.cobre.notification.application.port.inbound.CreateNotificationEventUseCase;
+import com.cobre.notification.application.port.inbound.CreateNotificationEventUseCase.CreateEventCommand;
 import com.cobre.notification.application.port.inbound.QueryNotificationEventsUseCase;
 import com.cobre.notification.application.port.inbound.QueryNotificationEventsUseCase.QueryCriteria;
 import com.cobre.notification.application.port.inbound.ReplayNotificationUseCase;
-import com.cobre.notification.application.port.outbound.SubscriptionPort;
 import com.cobre.notification.domain.exception.UnauthorizedClientAccessException;
 import com.cobre.notification.domain.model.DeliveryStatus;
 import com.cobre.notification.domain.model.NotificationEvent;
@@ -14,14 +14,13 @@ import com.cobre.notification.infrastructure.adapter.inbound.rest.dto.Notificati
 import com.cobre.notification.infrastructure.adapter.inbound.rest.dto.NotificationEventResponseDto;
 import com.cobre.notification.infrastructure.adapter.inbound.rest.dto.ReplayNotificationRequestDto;
 import com.cobre.notification.infrastructure.adapter.inbound.rest.mapper.NotificationRestMapper;
-import com.cobre.notification.infrastructure.security.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,39 +33,30 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
-import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/notification_events")
 @Tag(name = "Notification Events Self-Service API", description = "Endpoints for dispatching, querying, and replaying client notification events and inspecting the DLQ")
 public class NotificationEventController {
 
-    public static final String CLIENT_ID_HEADER = "X-Client-Id";
     public static final String WEBHOOK_URL_HEADER = "X-Webhook-Url";
 
     private final QueryNotificationEventsUseCase queryUseCase;
     private final ReplayNotificationUseCase replayUseCase;
-    private final DeliverNotificationUseCase deliverUseCase;
-    private final SubscriptionPort subscriptionPort;
+    private final CreateNotificationEventUseCase createUseCase;
     private final NotificationRestMapper mapper;
-    private final JwtTokenService jwtTokenService;
 
     public NotificationEventController(
             QueryNotificationEventsUseCase queryUseCase,
             ReplayNotificationUseCase replayUseCase,
-            DeliverNotificationUseCase deliverUseCase,
-            SubscriptionPort subscriptionPort,
-            NotificationRestMapper mapper,
-            JwtTokenService jwtTokenService
+            CreateNotificationEventUseCase createUseCase,
+            NotificationRestMapper mapper
     ) {
         this.queryUseCase = queryUseCase;
         this.replayUseCase = replayUseCase;
-        this.deliverUseCase = deliverUseCase;
-        this.subscriptionPort = subscriptionPort;
+        this.createUseCase = createUseCase;
         this.mapper = mapper;
-        this.jwtTokenService = jwtTokenService;
     }
 
     @PostMapping
@@ -75,35 +65,19 @@ public class NotificationEventController {
             description = "Creates a notification event of any type (e.g., credit_card_payment, debit_transfer, balance_update) and dispatches it to the client's webhook with up to 5 retry attempts before falling back to the DLQ."
     )
     public ResponseEntity<NotificationEventDetailResponseDto> createAndDispatchEvent(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestHeader(value = CLIENT_ID_HEADER, required = false) String headerClientId,
+            Authentication authentication,
             @RequestHeader(value = WEBHOOK_URL_HEADER, required = false) String headerWebhookUrl,
             @Valid @RequestBody CreateNotificationEventRequestDto requestBody
     ) {
-        String effectiveClientId = resolveAndValidateClientId(authorizationHeader, headerClientId, requestBody.clientId());
-        String overrideWebhookUrl = firstNonBlank(requestBody.webhookUrl(), headerWebhookUrl);
-        if (overrideWebhookUrl != null) {
-            subscriptionPort.updateWebhookUrl(effectiveClientId, overrideWebhookUrl.trim());
-        }
+        String clientId = resolveClientId(authentication, requestBody.clientId());
 
-        String eventId = requestBody.eventId() != null && !requestBody.eventId().isBlank()
-                ? requestBody.eventId().trim()
-                : "EVT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-
-        NotificationEvent newEvent = new NotificationEvent(
-                eventId,
-                requestBody.eventType().trim(),
-                requestBody.content().trim(),
-                Instant.now(),
-                DeliveryStatus.PENDING,
-                effectiveClientId,
-                overrideWebhookUrl,
-                0,
-                null,
-                Collections.emptyList()
-        );
-
-        NotificationEvent processed = deliverUseCase.deliverNotification(newEvent);
+        NotificationEvent processed = createUseCase.createAndDispatch(new CreateEventCommand(
+                clientId,
+                requestBody.eventId(),
+                requestBody.eventType(),
+                requestBody.content(),
+                firstNonBlank(requestBody.webhookUrl(), headerWebhookUrl)
+        ));
         return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toDetailDto(processed));
     }
 
@@ -113,10 +87,8 @@ public class NotificationEventController {
             description = "Returns all notification events belonging to the authenticated client, with optional filters by creation/delivery date and delivery_status."
     )
     public ResponseEntity<List<NotificationEventResponseDto>> listNotificationEvents(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @Parameter(description = "Authenticated Client ID header (e.g., CLIENT001)")
-            @RequestHeader(value = CLIENT_ID_HEADER, required = false) String headerClientId,
-            @Parameter(description = "Client ID query filter (must match X-Client-Id / JWT if both are provided)")
+            Authentication authentication,
+            @Parameter(description = "Optional; must match the authenticated client (JWT) if provided")
             @RequestParam(value = "client_id", required = false) String queryClientId,
             @Parameter(description = "Filter by delivery_status (completed, failed, pending, retrying)")
             @RequestParam(value = "delivery_status", required = false) String deliveryStatus,
@@ -133,7 +105,7 @@ public class NotificationEventController {
             @Parameter(description = "Alias for creation_date (delivery_date)")
             @RequestParam(value = "delivery_date", required = false) String deliveryDate
     ) {
-        String effectiveClientId = resolveAndValidateClientId(authorizationHeader, headerClientId, queryClientId);
+        String effectiveClientId = resolveClientId(authentication, queryClientId);
         DeliveryStatus parsedStatus = deliveryStatus != null && !deliveryStatus.isBlank()
                 ? DeliveryStatus.fromValue(deliveryStatus)
                 : null;
@@ -161,11 +133,10 @@ public class NotificationEventController {
             description = "Returns notifications stored in the 'notification_dlq' table after failing 5 retry attempts, with full context for manual reprocessing."
     )
     public ResponseEntity<List<DeadLetterNotificationResponseDto>> listClientDlqEvents(
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestHeader(value = CLIENT_ID_HEADER, required = false) String headerClientId,
+            Authentication authentication,
             @RequestParam(value = "client_id", required = false) String queryClientId
     ) {
-        String effectiveClientId = resolveAndValidateClientId(authorizationHeader, headerClientId, queryClientId);
+        String effectiveClientId = resolveClientId(authentication, queryClientId);
         List<DeadLetterNotificationResponseDto> response = queryUseCase.findDlqEventsByClient(effectiveClientId)
                 .stream()
                 .map(mapper::toDlqDto)
@@ -180,11 +151,10 @@ public class NotificationEventController {
     )
     public ResponseEntity<NotificationEventDetailResponseDto> getNotificationEventById(
             @PathVariable("notification_event_id") String notificationEventId,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestHeader(value = CLIENT_ID_HEADER, required = false) String headerClientId,
+            Authentication authentication,
             @RequestParam(value = "client_id", required = false) String queryClientId
     ) {
-        String effectiveClientId = resolveAndValidateClientId(authorizationHeader, headerClientId, queryClientId);
+        String effectiveClientId = resolveClientId(authentication, queryClientId);
         NotificationEvent event = queryUseCase.getEventById(notificationEventId, effectiveClientId);
         return ResponseEntity.ok(mapper.toDetailDto(event));
     }
@@ -196,13 +166,12 @@ public class NotificationEventController {
     )
     public ResponseEntity<NotificationEventDetailResponseDto> replayNotificationEvent(
             @PathVariable("notification_event_id") String notificationEventId,
-            @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorizationHeader,
-            @RequestHeader(value = CLIENT_ID_HEADER, required = false) String headerClientId,
+            Authentication authentication,
             @RequestParam(value = "client_id", required = false) String queryClientId,
             @RequestHeader(value = WEBHOOK_URL_HEADER, required = false) String headerWebhookUrl,
             @RequestBody(required = false) ReplayNotificationRequestDto requestBody
     ) {
-        String effectiveClientId = resolveAndValidateClientId(authorizationHeader, headerClientId, queryClientId);
+        String effectiveClientId = resolveClientId(authentication, queryClientId);
         String overrideWebhookUrl = firstNonBlank(
                 requestBody != null ? requestBody.webhookUrl() : null,
                 headerWebhookUrl
@@ -216,52 +185,25 @@ public class NotificationEventController {
         return ResponseEntity.ok(mapper.toDetailDto(replayed));
     }
 
-    private String resolveAndValidateClientId(
-            String authorizationHeader,
-            String headerClientId,
-            String queryClientId
-    ) {
-        String jwtClientId = null;
-        if (authorizationHeader != null && !authorizationHeader.isBlank()) {
-            String rawToken = authorizationHeader.trim();
-            if (rawToken.regionMatches(true, 0, "Bearer ", 0, 7)) {
-                rawToken = rawToken.substring(7).trim();
-            }
-            jwtClientId = jwtTokenService.validateToken(rawToken).clientId();
-        }
-
-        boolean hasJwt = jwtClientId != null && !jwtClientId.isBlank();
-        boolean hasHeader = headerClientId != null && !headerClientId.isBlank();
-        boolean hasQuery = queryClientId != null && !queryClientId.isBlank();
-
-        if (!hasJwt && !hasHeader && !hasQuery) {
+    /**
+     * The tenant identity is ONLY the client_id claim of the validated JWT. A client_id supplied in the query
+     * string or body is never trusted: it can only confirm the authenticated tenant, never switch to another one.
+     */
+    private String resolveClientId(Authentication authentication, String requestedClientId) {
+        if (authentication == null || authentication.getName() == null || authentication.getName().isBlank()) {
             throw new UnauthorizedClientAccessException(
-                    "Client identification is required via 'Authorization: Bearer <jwt>', 'X-Client-Id' header, or 'client_id' parameter"
+                    "Authentication required: send 'Authorization: Bearer <jwt>' obtained from POST /auth/token"
             );
         }
+        String authenticatedClientId = authentication.getName();
 
-        if (hasJwt && hasHeader && !jwtClientId.equals(headerClientId.trim())) {
+        if (requestedClientId != null && !requestedClientId.isBlank()
+                && !authenticatedClientId.equals(requestedClientId.trim())) {
             throw new UnauthorizedClientAccessException(
-                    "Cross-tenant access denied: JWT 'client_id' claim does not match 'X-Client-Id' header"
+                    "Cross-tenant access denied: 'client_id' does not match the authenticated client"
             );
         }
-
-        if (hasJwt && hasQuery && !jwtClientId.equals(queryClientId.trim())) {
-            throw new UnauthorizedClientAccessException(
-                    "Cross-tenant access denied: JWT 'client_id' claim does not match 'client_id' parameter"
-            );
-        }
-
-        if (hasHeader && hasQuery && !headerClientId.trim().equals(queryClientId.trim())) {
-            throw new UnauthorizedClientAccessException(
-                    "Cross-tenant access denied: 'X-Client-Id' header does not match 'client_id' parameter"
-            );
-        }
-
-        if (hasJwt) {
-            return jwtClientId;
-        }
-        return hasHeader ? headerClientId.trim() : queryClientId.trim();
+        return authenticatedClientId;
     }
 
     private Instant parseBoundary(String explicitDate, String fallbackSingleDate, boolean endOfDayIfLocalDate) {

@@ -40,25 +40,6 @@ management:
     tags:
       application: ${spring.application.name}
 
-# Resilience4j Retry & Circuit Breaker Configuration (Max 5 retries before DLQ)
-resilience4j:
-  retry:
-    instances:
-      webhookDelivery:
-        maxAttempts: 5
-        waitDuration: 1s
-        enableExponentialBackoff: true
-        exponentialBackoffMultiplier: 2
-        enableRandomizedWait: true
-        randomizedWaitFactor: 0.3
-  circuitbreaker:
-    instances:
-      webhookDelivery:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 15s
-
 # Application Custom Properties
 cobre:
   notification:
@@ -72,3 +53,13 @@ cobre:
       read-timeout-ms: 15000
       allow-insecure-localhost: false
       signing-secret: ${COBRE_WEBHOOK_SECRET:cobre-default-hmac-secret-key-2026}
+  security:
+    jwt:
+      # >= 32 bytes (HS256). DEMO DEFAULTS: override with real secrets via environment variables.
+      secret: ${COBRE_JWT_SECRET:cobre-jwt-signing-secret-key-2026-hs256}
+      expiration-seconds: ${COBRE_JWT_EXPIRATION_SECONDS:3600}
+    # Credentials exchanged for a JWT at POST /auth/token (demo values for the three seeded clients).
+    client-secrets:
+      CLIENT001: ${COBRE_CLIENT001_SECRET:client001-demo-secret}
+      CLIENT002: ${COBRE_CLIENT002_SECRET:client002-demo-secret}
+      CLIENT003: ${COBRE_CLIENT003_SECRET:client003-demo-secret}

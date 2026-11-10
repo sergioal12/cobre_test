@@ -43,7 +43,20 @@ make help
 
 ## Endpoints de la API REST Self-Service (Task 2)
 
-> **Aislamiento Multi-Tenant Obligatorio**: Todas las peticiones requieren identificar al cliente mediante el encabezado `X-Client-Id` (por ejemplo: `CLIENT001`, `CLIENT002`, `CLIENT003`) o el parámetro `client_id`. Un cliente jamás puede consultar ni reenviar eventos de otro cliente.
+> **Autenticación JWT y Aislamiento Multi-Tenant Obligatorio**:
+> 1. Obtén un token JWT firmado (`HS256`) autenticando las credenciales del cliente en `POST /auth/token` (`client_id` + `client_secret`).
+>    - Credenciales demo configuradas en [`application.yml`](./src/main/resources/application.yml):
+>      - `CLIENT001` / `client001-demo-secret`
+>      - `CLIENT002` / `client002-demo-secret`
+>      - `CLIENT003` / `client003-demo-secret`
+> 2. Envía el encabezado `Authorization: Bearer <access_token>` en todas las peticiones hacia `/notification_events/**`.
+> 3. El controlador extrae la identidad del cliente exclusivamente del token JWT autenticado y bloquea cualquier intento de suplantación (`403 Forbidden`) o acceso cruzado a recursos de otro cliente (`404 Not Found`).
+
+### 0. Generar y validar token JWT
+```bash
+# Generar token JWT para CLIENT001
+make api-jwt CLIENT_ID=CLIENT001
+```
 
 ### 1. Consultar eventos de notificación por cliente
 `GET /notification_events`
@@ -62,8 +75,12 @@ make api-list CLIENT_ID=CLIENT001
 # Filtrar eventos fallidos de CLIENT002
 make api-filter-failed CLIENT_ID=CLIENT002 STATUS=failed
 
-# Filtrar por rango de fechas y estado
-curl -sS -H "X-Client-Id: CLIENT001" \
+# Filtrar por rango de fechas y estado con Bearer JWT
+TOKEN=$(curl -sS -X POST -H "Content-Type: application/json" \
+  -d '{"client_id":"CLIENT001","client_secret":"client001-demo-secret"}' \
+  http://localhost:8080/auth/token | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+curl -sS -H "Authorization: Bearer $TOKEN" \
   "http://localhost:8080/notification_events?delivery_status=completed&from_date=2024-03-15T09:00:00Z&to_date=2024-03-15T16:00:00Z"
 ```
 
@@ -82,7 +99,11 @@ make api-detail CLIENT_ID=CLIENT001 EVENT_ID=EVT001
   1. **Por variable de entorno**: `COBRE_WEBHOOK_URL=https://tu-url-webhook.com/endpoint docker compose up -d`
   2. **Por petición en vivo (Body JSON o Header `X-Webhook-Url`)**:
      ```bash
-     curl -i -X POST -H "X-Client-Id: CLIENT003" \
+     TOKEN=$(curl -sS -X POST -H "Content-Type: application/json" \
+       -d '{"client_id":"CLIENT003","client_secret":"client003-demo-secret"}' \
+       http://localhost:8080/auth/token | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+     curl -i -X POST -H "Authorization: Bearer $TOKEN" \
        -H "Content-Type: application/json" \
        -d '{"webhook_url": "https://postman-echo.com/post"}' \
        "http://localhost:8080/notification_events/EVT005/replay"

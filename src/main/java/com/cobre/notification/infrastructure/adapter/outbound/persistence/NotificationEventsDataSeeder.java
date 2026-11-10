@@ -116,24 +116,39 @@ public class NotificationEventsDataSeeder implements ApplicationRunner {
         }
     }
 
-    private void seedDlqForFailedEvents(List<NotificationEvent> domainEvents) {
-        for (NotificationEvent event : domainEvents) {
-            if (event.getDeliveryStatus() == DeliveryStatus.FAILED
-                    && deadLetterQueuePort.findByEventId(event.getEventId()).isEmpty()) {
+    /**
+     * Reconciles the DLQ with the PERSISTED state of each event (never with the seed file, which only reflects the
+     * initial snapshot): failed events lacking a DLQ row get one, and rows of events that were since completed
+     * (e.g. through a manual replay) are closed as REPROCESSED instead of being resurrected as pending.
+     */
+    private void seedDlqForFailedEvents(List<NotificationEvent> seededEvents) {
+        for (NotificationEvent seeded : seededEvents) {
+            NotificationEvent persisted = eventRepositoryPort.findById(seeded.getEventId()).orElse(null);
+            if (persisted == null) {
+                continue;
+            }
+
+            var existingDlq = deadLetterQueuePort.findByEventId(persisted.getEventId());
+
+            if (persisted.getDeliveryStatus() == DeliveryStatus.FAILED && existingDlq.isEmpty()) {
                 deadLetterQueuePort.saveForManualReprocessing(new DeadLetterNotification(
                         null,
-                        event.getEventId(),
-                        event.getClientId(),
-                        event.getEventType(),
-                        event.getContent(),
-                        event.getWebhookUrl(),
+                        persisted.getEventId(),
+                        persisted.getClientId(),
+                        persisted.getEventType(),
+                        persisted.getContent(),
+                        persisted.getWebhookUrl(),
                         NotificationEvent.DEFAULT_MAX_RETRY_ATTEMPTS,
                         503,
                         "Exhausted 5 retry attempts. Initial delivery failed before self-service replay",
                         DlqStatus.PENDING_MANUAL_REPROCESS,
-                        event.getDeliveryDate(),
+                        persisted.getDeliveryDate(),
                         null
                 ));
+            } else if (persisted.getDeliveryStatus() == DeliveryStatus.COMPLETED
+                    && existingDlq.isPresent()
+                    && existingDlq.get().status() == DlqStatus.PENDING_MANUAL_REPROCESS) {
+                deadLetterQueuePort.markAsReprocessedIfPresent(persisted.getEventId(), persisted.getDeliveryDate());
             }
         }
     }
